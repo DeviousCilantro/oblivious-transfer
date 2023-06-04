@@ -1,0 +1,21 @@
+[package]
+name = "oblivious-transfer"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "alice"
+path = "alice/src/main.rs"
+
+
+[[bin]]
+name = "bob"
+path = "bob/src/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+num-primes = "0.3.0"
+rug = "1.19.2"
+hex = "0.4.3"
+base64 = "0.20.0"
