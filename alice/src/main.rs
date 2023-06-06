@@ -1,25 +1,37 @@
 use num_primes::Generator;
 use std::io;
-use rug::{Integer, rand};
+use rug::Integer;
 use std::net::TcpStream;
 use std::io::{prelude::*,BufReader,Write};
+use ring::rand::{SystemRandom, SecureRandom};
 
 fn generate_keypair() -> ((Integer, Integer), Integer) {
+    let rand = SystemRandom::new();
     println!("Generating keypair...");
     let p = Integer::from_str_radix(&Generator::safe_prime(256).to_string(), 10).unwrap();
     let q = Integer::from_str_radix(&Generator::safe_prime(256).to_string(), 10).unwrap();
     let n = p.clone() * q.clone();
     let lambda = Integer::lcm(p - Integer::from(1), &(q - Integer::from(1)));
     let mut e;
-    let mut rand = rand::RandState::new();
     loop {
-        e = lambda.clone().random_below(&mut rand);
+        e = random_integer(&rand, lambda.clone());
         if e.clone().gcd(&lambda) == 1 {
             break;
         };
     };
     let d = Integer::invert(e.clone(), &lambda).unwrap();
     ((n, e), d)
+}
+
+fn random_integer(rng: &SystemRandom, range: Integer) -> Integer {
+    loop {
+        let mut bytes = vec![0; ((range.significant_bits() + 7) / 8) as usize];
+        rng.fill(&mut bytes).unwrap();
+        let num = Integer::from_digits(&bytes, rug::integer::Order::Lsf);
+        if num < range {
+            return num;
+        }
+    }
 }
 
 fn combine_values(v: &Integer, randoms: &Vec<Integer>, d: &Integer, n: &Integer, messages: &[Integer]) -> Vec<String> {
@@ -33,6 +45,7 @@ fn combine_values(v: &Integer, randoms: &Vec<Integer>, d: &Integer, n: &Integer,
 
 fn main() {
     let mut stream = TcpStream::connect("127.0.0.1:6969").expect("Failed to connect");
+    let rand = SystemRandom::new();
     let ((n, e), d) = generate_keypair();
     let mut alice_sends_bob: Vec<String> = Vec::new();
     let mut input = String::new();
@@ -55,11 +68,10 @@ fn main() {
         let input = input.trim();
         messages.push(Integer::from_str_radix(&hex::encode(input), 16).unwrap());
     }
-    let mut rand = rand::RandState::new();
     alice_sends_bob.push(base64::encode(n.to_string()));
     alice_sends_bob.push(base64::encode(e.to_string()));
     for _ in 0..number {
-        let xi = n.clone().random_below(&mut rand);
+        let xi = random_integer(&rand, n.clone());
         alice_sends_bob.push(base64::encode(xi.to_string()));
         randoms.push(xi);
     }

@@ -1,7 +1,8 @@
 use std::io;
 use std::net::TcpListener;
 use std::io::{Read,Write};
-use rug::{Integer, rand};
+use rug::Integer;
+use ring::rand::{SystemRandom, SecureRandom};
 
 fn encrypt_and_blind(randoms: &Vec<Integer>, pk: &(Integer, Integer), b: u32, k: &Integer) -> Integer {
     let (n, e) = pk;
@@ -26,9 +27,21 @@ fn base64_to_integer(input: &str) -> Integer {
     Integer::from_str_radix(input, 10).unwrap()
 }
 
+fn random_integer(rng: &SystemRandom, range: Integer) -> Integer {
+    loop {
+        let mut bytes = vec![0; ((range.significant_bits() + 7) / 8) as usize];
+        rng.fill(&mut bytes).unwrap();
+        let num = Integer::from_digits(&bytes, rug::integer::Order::Lsf);
+        if num < range {
+            return num;
+        }
+    }
+}
+
 fn main() {
     let receiver_listener = TcpListener::bind("127.0.0.1:6969").expect("Failed and bind with the sender");
     println!("Listening on localhost:6969...");
+    let rand = SystemRandom::new();
     let mut stream = receiver_listener.accept().unwrap().0;
     let mut buf = [0; 4096];
     let mut received_bytes = Vec::new();
@@ -52,8 +65,7 @@ fn main() {
         .read_line(&mut input)
         .unwrap();
     let b = input.trim().parse().unwrap();
-    let mut rand = rand::RandState::new();
-    let k = n.random_below(&mut rand);
+    let k = random_integer(&rand, n.clone());
     let v = base64::encode(encrypt_and_blind(&randoms, &pk, b, &k).to_string());
     let mut stream = receiver_listener.accept().unwrap().0;
     println!("\nSending v to Alice...");
